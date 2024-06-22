@@ -1,0 +1,66 @@
+name: Azure Static Web Apps CI/CD
+
+on:
+    push:
+        branches:
+            - main
+    pull_request:
+        types: [opened, synchronize, reopened, closed]
+        branches:
+            - main
+
+jobs:
+    build_and_deploy_job:
+        if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
+        runs-on: ubuntu-latest
+        name: Build and Deploy Job
+        steps:
+            - uses: actions/checkout@v3
+              with:
+                  submodules: true
+                  lfs: false
+
+            - name: Set up Docker Buildx
+              uses: docker/setup-buildx-action@v2
+
+            - name: Cache Docker layers
+              uses: actions/cache@v3
+              with:
+                  path: /tmp/.buildx-cache
+                  key: ${{ runner.os }}-buildx-${{ github.sha }}
+                  restore-keys: |
+                      ${{ runner.os }}-buildx-
+
+            - name: Build Docker Image
+              run: |
+                  docker build -t my-nextjs-app .
+
+            - name: Run Docker Container to Extract Build Output
+              run: |
+                  docker create --name my-nextjs-app-container my-nextjs-app
+                  docker cp my-nextjs-app-container:/usr/src/app/.next .next
+                  docker rm my-nextjs-app-container
+
+            - name: Deploy to Azure Static Web Apps
+              id: builddeploy
+              uses: Azure/static-web-apps-deploy@v1
+              with:
+                  azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_BLUE_MEADOW_03E31FE00 }}
+                  repo_token: ${{ secrets.GITHUB_TOKEN }} # Used for GitHub integrations (i.e., PR comments)
+                  action: 'upload'
+                  app_location: '.' # Location of the build output directory
+                  api_location: '' # Api source code path - optional
+                  output_location: '.next' # Built app content directory
+                  skip_app_build: true # Skip the build step in Azure
+
+    close_pull_request_job:
+        if: github.event_name == 'pull_request' && github.event.action == 'closed'
+        runs-on: ubuntu-latest
+        name: Close Pull Request Job
+        steps:
+            - name: Close Pull Request
+              id: closepullrequest
+              uses: Azure/static-web-apps-deploy@v1
+              with:
+                  azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_BLUE_MEADOW_03E31FE00 }}
+                  action: 'close'
